@@ -9,6 +9,10 @@ Paket project ini berisi:
 - `MANUAL_BOOK.docx`
 - `db_reservasi_futsal_new.sql`
 
+## GitHub Repository
+
+- https://github.com/afrizalPrayogi/Reservasi-Lapangan
+
 ## Isi utama
 
 - Backend: API dan database logic
@@ -19,4 +23,3 @@ Paket project ini berisi:
 ## Catatan
 
 File `.env` dan file hasil build tidak disertakan agar repository tetap aman dan ringan.
-

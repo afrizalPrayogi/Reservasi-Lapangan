@@ -2,6 +2,12 @@
 
 Panduan sederhana untuk menjalankan aplikasi di perangkat baru.
 
+## Link Repository GitHub
+
+Repositori project:
+
+- https://github.com/afrizalPrayogi/Reservasi-Lapangan
+
 ## 1. Gambaran Umum Aplikasi
 
 Aplikasi Reservasi Futsal GOR Tambora terdiri dari tiga bagian utama yang saling terhubung. Dengan panduan ini, Anda bisa menjalankan seluruh sistem di perangkat baru tanpa harus memahami istilah teknis secara mendalam.
