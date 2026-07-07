@@ -1,0 +1,336 @@
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { BookingStatus, DayType } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+
+function isWeekend(date: Date) {
+  const day = date.getDay();
+  // 0 = Sunday, 6 = Saturday
+  return day === 0 || day === 6;
+}
+
+function roundUpToNextHour(date: Date) {
+  const d = new Date(date);
+  d.setMinutes(0, 0, 0);
+  if (date.getMinutes() !== 0 || date.getSeconds() !== 0 || date.getMilliseconds() !== 0) {
+    d.setHours(d.getHours() + 1);
+  }
+  return d;
+}
+
+function getLocalHour(date: Date): number {
+  // Assuming WIB (UTC+7)
+  const utcHour = date.getUTCHours();
+  const wibHour = (utcHour + 7) % 24;
+  return wibHour;
+}
+
+function parseLocalDateYYYYMMDD(value: string): { year: number; month: number; day: number } {
+  const match = /^\d{4}-\d{2}-\d{2}$/.exec(value);
+  if (!match) {
+    throw new BadRequestException('date harus format YYYY-MM-DD');
+  }
+  const [yearStr, monthStr, dayStr] = value.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    throw new BadRequestException('date tidak valid');
+  }
+  return { year, month, day };
+}
+
+@Injectable()
+export class MobileFieldsService {
+  constructor(private prisma: PrismaService) {}
+
+  private resolveSlot(params: {
+    startTime?: string;
+    endTime?: string;
+    date?: string;
+    startHour?: number;
+    durationHours?: number;
+  }): { start: Date; end: Date } {
+    const { startTime, endTime, date, startHour, durationHours } = params;
+
+    if (startTime || endTime) {
+      if (!startTime || !endTime) {
+        throw new BadRequestException('startTime dan endTime harus diisi bersama');
+      }
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        throw new BadRequestException('startTime/endTime tidak valid');
+      }
+      if (end <= start) {
+        throw new BadRequestException('endTime harus lebih besar dari startTime');
+      }
+      // basic guardrail
+      const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      if (diffHours > 24) {
+        throw new BadRequestException('Range waktu maksimal 24 jam');
+      }
+      return { start, end };
+    }
+
+    const now = new Date();
+    const start = roundUpToNextHour(now);
+
+    let base = start;
+    if (date) {
+      const { year, month, day } = parseLocalDateYYYYMMDD(date);
+      base = new Date(year, month - 1, day, 0, 0, 0, 0);
+    }
+
+    const hour = startHour ?? (date ? 8 : start.getHours());
+    const dur = durationHours ?? 1;
+    if (hour + dur > 24) {
+      throw new BadRequestException('Slot waktu melewati batas hari (24 jam)');
+    }
+
+    const slotStart = new Date(base);
+    slotStart.setHours(hour, 0, 0, 0);
+
+    const slotEnd = new Date(slotStart);
+    slotEnd.setHours(slotEnd.getHours() + dur);
+
+    return { start: slotStart, end: slotEnd };
+  }
+
+  private getPricePerHourForSlot(input: {
+    prices: { dayType: DayType; startHour: number; endHour: number; price: number }[];
+    slotStart: Date;
+  }): number | null {
+    const { prices } = input;
+    
+    // Kembalikan harga pertama yang tersedia (WEEKDAY jam 8-17 sebagai default)
+    // Tidak peduli jam berapa user akses
+    if (prices.length === 0) return null;
+    
+    // Cari harga WEEKDAY terlebih dahulu
+    const weekdayPrice = prices.find(p => p.dayType === DayType.WEEKDAY);
+    if (weekdayPrice) return weekdayPrice.price;
+    
+    // Kalau tidak ada WEEKDAY, ambil yang pertama
+    return prices[0].price;
+  }
+
+  async listMobileFields(params: {
+    startTime?: string;
+    endTime?: string;
+    date?: string;
+    startHour?: number;
+    durationHours?: number;
+    search?: string;
+    onlyAvailable?: boolean;
+    page?: number;
+    limit?: number;
+  }) {
+    const { start, end } = this.resolveSlot(params);
+    const where: any = {
+      isActive: true,
+      ...(params.search
+        ? {
+            name: { contains: params.search },
+          }
+        : {}),
+    };
+
+    // Fetch ALL fields first
+    const allFields = await this.prisma.field.findMany({
+      where,
+      include: {
+        prices: { orderBy: [{ dayType: 'asc' }, { startHour: 'asc' }] },
+        images: { orderBy: [{ isPrimary: 'desc' }, { order: 'asc' }, { createdAt: 'asc' }] },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+
+    const fieldIds = allFields.map((f) => f.id);
+
+    // Find any booking that overlaps the slot
+    const busyBookings = fieldIds.length
+      ? await this.prisma.booking.findMany({
+          where: {
+            fieldId: { in: fieldIds },
+            status: { not: BookingStatus.CANCELLED },
+            AND: [{ startTime: { lt: end } }, { endTime: { gt: start } }],
+          },
+          select: { fieldId: true },
+        })
+      : [];
+
+    const busySet = new Set(busyBookings.map((b) => b.fieldId));
+
+    // Map all fields
+    let filteredFields = allFields
+      .map((f) => {
+        const isAvailable = !busySet.has(f.id);
+        const pricePerHour = this.getPricePerHourForSlot({
+          prices: f.prices,
+          slotStart: start,
+        });
+
+        const primaryImageUrl = f.images?.[0]?.imageUrl ?? null;
+
+        return {
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          imageUrl: primaryImageUrl,
+          size: {
+            lengthMeter: f.lengthMeter ?? null,
+            widthMeter: f.widthMeter ?? null,
+          },
+          pricePerHour, // bisa null jika tidak ada harga untuk slot ini
+          isAvailable,
+          images: f.images.map((img) => ({
+            id: img.id,
+            imageUrl: img.imageUrl,
+            isPrimary: img.isPrimary,
+            order: img.order,
+          })),
+        };
+      })
+      .filter((x) => (params.onlyAvailable ? x.isAvailable : true))
+      .sort((a, b) => {
+        // Available first
+        if (a.isAvailable !== b.isAvailable) return a.isAvailable ? -1 : 1;
+        // Then by field name
+        return a.name.localeCompare(b.name);
+      });
+
+    // Apply pagination AFTER filtering
+    const page = params.page ?? 1;
+    const limit = params.limit ?? 20;
+    const total = filteredFields.length;
+    const skip = (page - 1) * limit;
+    const paginatedFields = filteredFields.slice(skip, skip + limit);
+
+    return {
+      message: 'Daftar lapangan (mobile) berhasil diambil',
+      slot: {
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+      },
+      data: paginatedFields,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getMobileFieldDetail(
+    id: string,
+    params: {
+      startTime?: string;
+      endTime?: string;
+      date?: string;
+      startHour?: number;
+      durationHours?: number;
+    },
+  ) {
+    const { start, end } = this.resolveSlot(params);
+
+    const field = await this.prisma.field.findUnique({
+      where: { id },
+      include: {
+        prices: { orderBy: [{ dayType: 'asc' }, { startHour: 'asc' }] },
+        images: { orderBy: [{ isPrimary: 'desc' }, { order: 'asc' }, { createdAt: 'asc' }] },
+      },
+    });
+
+    if (!field || !field.isActive) {
+      return {
+        message: 'Lapangan tidak ditemukan',
+        data: null,
+      };
+    }
+
+    const pricePerHour = this.getPricePerHourForSlot({
+      prices: field.prices,
+      slotStart: start,
+    });
+
+    // If no price available for this slot, return not available
+    if (pricePerHour === null) {
+      return {
+        message: 'Lapangan tidak tersedia untuk slot waktu ini',
+        data: null,
+      };
+    }
+
+    const busy = await this.prisma.booking.findFirst({
+      where: {
+        fieldId: id,
+        status: { not: BookingStatus.CANCELLED },
+        AND: [{ startTime: { lt: end } }, { endTime: { gt: start } }],
+      },
+      select: { id: true },
+    });
+
+    // Ambil daftar jam yang sudah dibooking pada tanggal yang diminta
+    let dateStr = params.date;
+    if (!dateStr) {
+      const nowWIB = new Date(new Date().getTime() + 7 * 60 * 60 * 1000);
+      dateStr = nowWIB.toISOString().split('T')[0];
+    }
+    const { year, month, day } = parseLocalDateYYYYMMDD(dateStr);
+    
+    // WIB = UTC+7
+    const startOfDay = new Date(Date.UTC(year, month - 1, day, 0 - 7, 0, 0, 0));
+    const endOfDay = new Date(Date.UTC(year, month - 1, day, 24 - 7, 0, 0, 0));
+
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        fieldId: id,
+        status: { not: BookingStatus.CANCELLED },
+        startTime: { gte: startOfDay, lt: endOfDay },
+      },
+      select: {
+        startTime: true,
+        endTime: true,
+      },
+    });
+
+    const bookedHours: number[] = [];
+    for (const b of bookings) {
+      const startHour = getLocalHour(b.startTime);
+      const diffMs = b.endTime.getTime() - b.startTime.getTime();
+      const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+      for (let i = 0; i < diffHours; i++) {
+        const bookedHour = (startHour + i) % 24;
+        bookedHours.push(bookedHour);
+      }
+    }
+
+    return {
+      message: 'Detail lapangan (mobile) berhasil diambil',
+      slot: {
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+      },
+      data: {
+        id: field.id,
+        name: field.name,
+        type: field.type,
+        imageUrl: field.images?.[0]?.imageUrl ?? null,
+        size: {
+          lengthMeter: field.lengthMeter ?? null,
+          widthMeter: field.widthMeter ?? null,
+        },
+        pricePerHour,
+        isAvailable: !busy,
+        bookedHours,
+        images: field.images.map((img) => ({
+          id: img.id,
+          imageUrl: img.imageUrl,
+          isPrimary: img.isPrimary,
+          order: img.order,
+        })),
+      },
+    };
+  }
+}

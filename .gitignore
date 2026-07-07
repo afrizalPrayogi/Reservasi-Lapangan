@@ -1,0 +1,30 @@
+# Common local/development files
+.env
+.env.*
+*.log
+
+# Node / Next.js
+node_modules/
+dist/
+build/
+.next/
+coverage/
+tsconfig.tsbuildinfo
+
+# Flutter / Dart
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Android / iOS / desktop generated files
+android/.gradle/
+android/app/.cxx/
+ios/Flutter/ephemeral/
+macos/Flutter/ephemeral/
+windows/flutter/ephemeral/
+
+# Editor
+.idea/
+.vscode/
+
