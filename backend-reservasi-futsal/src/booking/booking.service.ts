@@ -3,11 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UploadPaymentProofDto, CancelBookingDto } from './dto/update-booking.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoggerService } from '../common/logger.service';
-import { normalizeAssetUrl } from '../common/network.util';
+import { buildPublicUrl, normalizeAssetUrl, toDatabaseBytes } from '../common/network.util';
 import { BookingStatus, DayType, PaymentStatus } from '@prisma/client';
 import { EmailService } from '../common/email.service';
 
@@ -62,9 +63,10 @@ export class BookingService {
     };
   }
 
-  async create(dto: { customerId: string; fieldId: string; startTime: string; endTime: string; proofUrl?: string; isDp?: boolean; assetBaseUrl?: string }) {
-    const { customerId, fieldId, startTime, endTime, proofUrl, isDp = false, assetBaseUrl } = dto;
+  async create(dto: { customerId: string; fieldId: string; startTime: string; endTime: string; proofUrl?: string; proofData?: Buffer; proofMimeType?: string; isDp?: boolean; assetBaseUrl?: string }) {
+    const { customerId, fieldId, startTime, endTime, proofUrl, proofData, proofMimeType, isDp = false, assetBaseUrl } = dto;
     const normalizedProofUrl = normalizeAssetUrl(proofUrl, assetBaseUrl) ?? proofUrl;
+    const bookingId = randomUUID();
 
     // Validasi customer exists
     const customer = await this.prisma.customer.findUnique({
@@ -80,7 +82,7 @@ export class BookingService {
       include: {
         openingHours: true,
       },
-    });
+    }) as any;
 
     if (!field) {
       throw new NotFoundException('Lapangan tidak ditemukan');
@@ -148,7 +150,7 @@ export class BookingService {
           },
         ],
       },
-    });
+    }) as any;
 
     if (conflictingBooking) {
       throw new BadRequestException(
@@ -163,10 +165,27 @@ export class BookingService {
     const initialStatus = BookingStatus.PENDING;
 
     const dpAmount = isDp ? Math.round(totalPrice * 0.5) : 0;
+    const paymentCreateData = proofData
+      ? {
+          proofData: toDatabaseBytes(proofData),
+          mimeType: proofMimeType,
+          proofUrl: buildPublicUrl(
+            assetBaseUrl,
+            `/api/v1/media/payment-proofs/${bookingId}`,
+          ),
+          status: PaymentStatus.WAITING_VERIFICATION,
+        }
+      : normalizedProofUrl
+        ? {
+            proofUrl: normalizedProofUrl,
+            status: PaymentStatus.WAITING_VERIFICATION,
+          }
+        : null;
 
     // Buat booking dengan payment (jika ada proofUrl)
-    const booking = await this.prisma.booking.create({
+    const booking: any = await this.prisma.booking.create({
       data: {
+        id: bookingId,
         customerId,
         fieldId,
         startTime: start,
@@ -176,13 +195,10 @@ export class BookingService {
         dpAmount,
         paidAmount: 0,
         status: initialStatus,
-        ...(normalizedProofUrl
+        ...(paymentCreateData
           ? {
               payment: {
-                create: {
-                  proofUrl: normalizedProofUrl,
-                  status: PaymentStatus.WAITING_VERIFICATION,
-                },
+                create: paymentCreateData,
               },
             }
           : {}),
@@ -500,9 +516,24 @@ export class BookingService {
     };
   }
 
-  async uploadPaymentProof(bookingId: string, customerId: string, dto: UploadPaymentProofDto & { assetBaseUrl?: string }) {
-    const { assetBaseUrl, proofUrl } = dto;
+  async uploadPaymentProof(bookingId: string, customerId: string, dto: { assetBaseUrl?: string; proofUrl?: string; proofData?: Buffer; proofMimeType?: string }) {
+    const { assetBaseUrl, proofUrl, proofData, proofMimeType } = dto;
     const normalizedProofUrl = normalizeAssetUrl(proofUrl, assetBaseUrl) ?? proofUrl;
+    const publicProofUrl = buildPublicUrl(
+      assetBaseUrl,
+      `/api/v1/media/payment-proofs/${bookingId}`,
+    );
+    const paymentData = proofData
+      ? {
+          proofData: toDatabaseBytes(proofData),
+          mimeType: proofMimeType,
+          proofUrl: publicProofUrl,
+          status: PaymentStatus.WAITING_VERIFICATION,
+        }
+      : {
+          proofUrl: normalizedProofUrl || publicProofUrl,
+          status: PaymentStatus.WAITING_VERIFICATION,
+        };
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       include: { payment: true },
@@ -529,17 +560,13 @@ export class BookingService {
     if (booking.payment) {
       payment = await this.prisma.payment.update({
         where: { id: booking.payment.id },
-        data: {
-          proofUrl: normalizedProofUrl,
-          status: PaymentStatus.WAITING_VERIFICATION,
-        },
+        data: paymentData,
       });
     } else {
       payment = await this.prisma.payment.create({
         data: {
           bookingId,
-          proofUrl: normalizedProofUrl,
-          status: PaymentStatus.WAITING_VERIFICATION,
+          ...paymentData,
         },
       });
     }

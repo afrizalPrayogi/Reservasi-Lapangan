@@ -81,13 +81,15 @@ model Field {
 
 model FieldImage {
   id                                                    String    @id @default(uuid())
-  fieldId                                               String
+  fieldId                                               String?
 
-  imageUrl  String   // URL dari upload server / CDN
+  imageUrl                                              String    // URL publik yang digunakan UI
+  imageData                                             Bytes?    // Binary gambar disimpan di database
+  mimeType                                              String?
   isPrimary                                             Boolean   @default(false)
-  order     Int?     // untuk urutan gambar di carousel
+  order                                                 Int?      // untuk urutan gambar di carousel
 
-  field                                                 Field    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  field                                                 Field?   @relation(fields: [fieldId], references: [id], onDelete: Cascade)
 
   createdAt                                             DateTime  @default(now())
 
@@ -184,7 +186,9 @@ model Payment {
   id                                                                  String         @id @default(uuid())
   bookingId                                                           String         @unique
 
-  proofUrl      String           // URL bukti transfer (hasil upload)
+  proofUrl                                                            String         // URL publik yang digunakan UI
+  proofData                                                           Bytes?         // Binary bukti transfer disimpan di database
+  mimeType                                                            String?
   status                                                              PaymentStatus  @default(WAITING_VERIFICATION)
 
   verifiedById                                                        String?

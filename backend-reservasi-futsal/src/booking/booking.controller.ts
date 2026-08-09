@@ -46,14 +46,13 @@ export class BookingController {
     @Body() dto: CreateBookingDto,
     @UploadedFile() paymentProof?: Express.Multer.File,
   ) {
+    let proofData: Buffer | undefined;
+    let proofMimeType: string | undefined;
     let proofUrl: string | undefined;
     if (paymentProof) {
       this.fileUploadService.validateImageFile(paymentProof);
-      proofUrl = this.fileUploadService.generateFileUrl(
-        paymentProof.filename,
-        'payment-proof',
-        getRequestBaseUrl(req),
-      );
+      proofData = paymentProof.buffer;
+      proofMimeType = paymentProof.mimetype;
     } else if (dto.proofUrl) {
       proofUrl = normalizeAssetUrl(dto.proofUrl, getRequestBaseUrl(req)) ?? dto.proofUrl;
     }
@@ -99,6 +98,8 @@ export class BookingController {
       fieldId: dto.fieldId,
       startTime: start.toISOString(),
       endTime: end.toISOString(),
+      proofData,
+      proofMimeType,
       proofUrl,
       isDp: dto.isDp,
       assetBaseUrl: getRequestBaseUrl(req),
@@ -142,15 +143,14 @@ export class BookingController {
     @UploadedFile() paymentProof?: Express.Multer.File,
     @Body() dto?: UploadPaymentProofDto,
   ) {
-    let proofUrl: string;
+    let proofData: Buffer | undefined;
+    let proofMimeType: string | undefined;
+    let proofUrl: string | undefined;
     
     if (paymentProof) {
       this.fileUploadService.validateImageFile(paymentProof);
-      proofUrl = this.fileUploadService.generateFileUrl(
-        paymentProof.filename,
-        'payment-proof',
-        getRequestBaseUrl(req),
-      );
+      proofData = paymentProof.buffer;
+      proofMimeType = paymentProof.mimetype;
     } else if (dto?.proofUrl) {
       proofUrl = normalizeAssetUrl(dto.proofUrl, getRequestBaseUrl(req)) ?? dto.proofUrl;
     } else {
@@ -159,6 +159,8 @@ export class BookingController {
 
     return this.bookingService.uploadPaymentProof(id, customerId, {
       proofUrl,
+      proofData,
+      proofMimeType,
       assetBaseUrl: getRequestBaseUrl(req),
     });
   }

@@ -10,6 +10,7 @@ import { FieldsModule } from './admin/fields/fields.module';
 import { AdminBookingsModule } from './admin/bookings/bookings.module';
 import { BookingModule } from './booking/booking.module';
 import { MobileFieldsModule } from './fields/mobile-fields.module';
+import { MediaController } from './media/media.controller';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { MobileFieldsModule } from './fields/mobile-fields.module';
     BookingModule,
     MobileFieldsModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, MediaController],
   providers: [AppService],
 })
 export class AppModule {}

@@ -1,28 +1,12 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { existsSync, mkdirSync } from 'fs';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { extname } from 'path';
-import { v4 as uuidv4 } from 'uuid';
-import type { Multer } from 'multer';
-import { getBaseUrl } from './network.util';
 
 @Injectable()
 export class FileUploadService {
   // Konfigurasi multer untuk payment proofs
   static multerConfigPaymentProof = {
-    storage: diskStorage({
-      destination: (req, file, cb) => {
-        const uploadPath = './uploads/payment-proofs';
-        if (!existsSync(uploadPath)) {
-          mkdirSync(uploadPath, { recursive: true });
-        }
-        cb(null, uploadPath);
-      },
-      filename: (req, file, cb) => {
-        const uniqueName = `${uuidv4()}${extname(file.originalname)}`;
-        cb(null, uniqueName);
-      },
-    }),
+    storage: memoryStorage(),
     fileFilter: (req, file, cb) => {
       const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
       const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
@@ -46,19 +30,7 @@ export class FileUploadService {
 
   // Konfigurasi multer untuk field images
   static multerConfigFieldImage = {
-    storage: diskStorage({
-      destination: (req, file, cb) => {
-        const uploadPath = './uploads/field-images';
-        if (!existsSync(uploadPath)) {
-          mkdirSync(uploadPath, { recursive: true });
-        }
-        cb(null, uploadPath);
-      },
-      filename: (req, file, cb) => {
-        const uniqueName = `${uuidv4()}${extname(file.originalname)}`;
-        cb(null, uniqueName);
-      },
-    }),
+    storage: memoryStorage(),
     fileFilter: (req, file, cb) => {
       const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
       const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
@@ -79,17 +51,6 @@ export class FileUploadService {
       fileSize: 5 * 1024 * 1024, // 5MB
     },
   };
-
-  // Helper untuk generate URL dari file path
-  generateFileUrl(
-    filename: string,
-    type: 'payment-proof' | 'field-image',
-    baseUrl?: string,
-  ): string {
-    const resolvedBaseUrl = (baseUrl || getBaseUrl()).replace(/\/+$/, '');
-    const folder = type === 'payment-proof' ? 'payment-proofs' : 'field-images';
-    return `${resolvedBaseUrl}/uploads/${folder}/${filename}`;
-  }
 
   // Validasi file image
   validateImageFile(file: Express.Multer.File): void {

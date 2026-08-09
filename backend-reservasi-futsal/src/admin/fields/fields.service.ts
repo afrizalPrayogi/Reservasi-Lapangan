@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoggerService } from '../../common/logger.service';
-import { normalizeAssetUrl } from '../../common/network.util';
+import { buildPublicUrl, normalizeAssetUrl, toDatabaseBytes } from '../../common/network.util';
 import {
   CreateFieldDto,
   CreateFieldPriceDto,
@@ -159,6 +159,44 @@ export class FieldsService {
       ...field,
       images,
       imageUrls,
+    };
+  }
+
+  async storeUploadedImage(
+    file: Express.Multer.File,
+    assetBaseUrl?: string,
+  ) {
+    if (!file?.buffer) {
+      throw new BadRequestException('File gambar tidak ditemukan');
+    }
+
+    const image = await this.prisma.fieldImage.create({
+      data: {
+        fieldId: null,
+        imageUrl: '',
+        imageData: toDatabaseBytes(file.buffer),
+        mimeType: file.mimetype,
+        isPrimary: false,
+      },
+    });
+
+    const imageUrl = buildPublicUrl(
+      assetBaseUrl,
+      `/api/v1/media/field-images/${image.id}`,
+    );
+
+    const updatedImage = await this.prisma.fieldImage.update({
+      where: { id: image.id },
+      data: { imageUrl },
+    });
+
+    this.logger.log(`Field image uploaded: ${updatedImage.id}`, 'FieldsService');
+
+    return {
+      message: 'Gambar berhasil diupload',
+      data: {
+        imageUrl: updatedImage.imageUrl,
+      },
     };
   }
 

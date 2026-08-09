@@ -72,6 +72,19 @@ export function getRequestBaseUrl(req?: RequestLike): string {
   return `${protocol}://${host}`;
 }
 
+export function buildPublicUrl(baseUrl: string | undefined, path: string): string {
+  const normalizedBase =
+    (baseUrl || getBaseUrl()).replace(/\/+$/, '');
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${normalizedBase}${normalizedPath}`;
+}
+
+export function toDatabaseBytes(buffer: Buffer): Uint8Array<ArrayBuffer> {
+  const start = buffer.byteOffset;
+  const end = buffer.byteOffset + buffer.byteLength;
+  return new Uint8Array(buffer.buffer.slice(start, end)) as Uint8Array<ArrayBuffer>;
+}
+
 export function normalizeAssetUrl(
   assetUrl?: string | null,
   baseUrl?: string,

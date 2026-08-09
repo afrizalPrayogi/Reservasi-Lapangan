@@ -47,17 +47,7 @@ export class FieldsController {
     @Req() req: any,
   ) {
     this.fileUploadService.validateImageFile(file);
-    const imageUrl = this.fileUploadService.generateFileUrl(
-      file.filename,
-      'field-image',
-      getRequestBaseUrl(req),
-    );
-    return {
-      message: 'Gambar berhasil diupload',
-      data: {
-        imageUrl,
-      },
-    };
+    return this.fieldsService.storeUploadedImage(file, getRequestBaseUrl(req));
   }
 
   @Post()
