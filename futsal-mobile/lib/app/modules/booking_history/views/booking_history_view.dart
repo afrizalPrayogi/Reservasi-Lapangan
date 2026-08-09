@@ -146,6 +146,42 @@ class BookingHistoryView extends GetView<BookingHistoryController> {
             ],
           ),
           const SizedBox(height: 14),
+          if (booking.payment?.proofUrl != null &&
+              booking.payment!.proofUrl!.isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: double.infinity,
+                height: 180,
+                color: Colors.grey[100],
+                child: Image.network(
+                  booking.payment!.proofUrl!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.grey[200],
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.image_not_supported_outlined,
+                        color: Colors.grey,
+                        size: 32,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Bukti pembayaran tersedia',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Row(
             children: [
               const Icon(

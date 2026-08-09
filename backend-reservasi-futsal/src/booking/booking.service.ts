@@ -379,6 +379,14 @@ export class BookingService {
         date: booking.startTime,
         startTime: booking.startTime,
         durationHours,
+        payment: booking.payment
+          ? {
+              ...booking.payment,
+              proofUrl:
+                normalizeAssetUrl(booking.payment.proofUrl, assetBaseUrl) ??
+                booking.payment.proofUrl,
+            }
+          : null,
       };
     });
 

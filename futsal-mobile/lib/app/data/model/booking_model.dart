@@ -25,6 +25,7 @@ class Booking {
   final DateTime date;
   final DateTime startTime;
   final int durationHours;
+  final BookingPayment? payment;
 
   Booking({
     required this.id,
@@ -35,6 +36,7 @@ class Booking {
     required this.date,
     required this.startTime,
     required this.durationHours,
+    this.payment,
   });
 
   factory Booking.fromJson(Map<String, dynamic> json) {
@@ -55,6 +57,9 @@ class Booking {
       durationHours: json['durationHours'] is num
           ? (json['durationHours'] as num).toInt()
           : (int.tryParse((json['durationHours'] ?? '0').toString()) ?? 0),
+      payment: json['payment'] is Map
+          ? BookingPayment.fromJson(Map<String, dynamic>.from(json['payment']))
+          : null,
     );
   }
 
@@ -68,6 +73,31 @@ class Booking {
       'date': date.toIso8601String(),
       'startTime': startTime.toIso8601String(),
       'durationHours': durationHours,
+      'payment': payment?.toJson(),
+    };
+  }
+}
+
+class BookingPayment {
+  final String? proofUrl;
+  final String? status;
+
+  BookingPayment({
+    required this.proofUrl,
+    required this.status,
+  });
+
+  factory BookingPayment.fromJson(Map<String, dynamic> json) {
+    return BookingPayment(
+      proofUrl: (json['proofUrl'] ?? json['proof_url'])?.toString(),
+      status: (json['status'] ?? '').toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'proofUrl': proofUrl,
+      'status': status,
     };
   }
 }
