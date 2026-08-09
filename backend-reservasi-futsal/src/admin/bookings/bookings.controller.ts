@@ -10,11 +10,13 @@ import {
   Post,
   Query,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { AdminJwtAuthGuard, RolesGuard } from '../auth/guards';
 import { Roles, CurrentAdmin } from '../auth/decorators';
 import { VerifyPaymentDto, CreateOfflineBookingDto } from './dto';
+import { getRequestBaseUrl } from '../../common/network.util';
 
 @Controller('admin/bookings')
 @UseGuards(AdminJwtAuthGuard, RolesGuard)
@@ -24,6 +26,7 @@ export class BookingsController {
   @Get()
   @Roles('Super Admin', 'Administrator', 'Admin')
   findAll(
+    @Req() req: any,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('search') search?: string,
@@ -44,6 +47,7 @@ export class BookingsController {
       startDate,
       endDate,
       today,
+      assetBaseUrl: getRequestBaseUrl(req),
     });
   }
 
@@ -58,6 +62,7 @@ export class BookingsController {
   @Get('pending-verification')
   @Roles('Super Admin', 'Administrator', 'Admin')
   getPendingVerification(
+    @Req() req: any,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('venueId') venueId?: string,
@@ -66,23 +71,25 @@ export class BookingsController {
       page,
       limit,
       venueId,
+      assetBaseUrl: getRequestBaseUrl(req),
     });
   }
 
   @Get(':id')
   @Roles('Super Admin', 'Administrator', 'Admin')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.bookingsService.findOne(id);
+  findOne(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    return this.bookingsService.findOne(id, getRequestBaseUrl(req));
   }
 
   @Patch('verify-payment/:id')
   @Roles('Super Admin', 'Administrator', 'Admin')
   verifyPayment(
+    @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: VerifyPaymentDto,
     @CurrentAdmin() admin: any,
   ) {
-    return this.bookingsService.verifyPayment(id, dto, admin.sub);
+    return this.bookingsService.verifyPayment(id, dto, admin.sub, getRequestBaseUrl(req));
   }
 
   @Post()

@@ -16,6 +16,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { BookingService } from './booking.service';
@@ -24,6 +25,7 @@ import { UploadPaymentProofDto, CancelBookingDto } from './dto/update-booking.dt
 import { JwtAuthGuard } from '../auth/guards';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { FileUploadService } from '../common/file-upload.service';
+import { getRequestBaseUrl, normalizeAssetUrl } from '../common/network.util';
 
 @Controller('bookings')
 @UseGuards(JwtAuthGuard)
@@ -39,6 +41,7 @@ export class BookingController {
     FileInterceptor('paymentProof', FileUploadService.multerConfigPaymentProof),
   )
   create(
+    @Req() req: any,
     @CurrentUser('sub') customerId: string,
     @Body() dto: CreateBookingDto,
     @UploadedFile() paymentProof?: Express.Multer.File,
@@ -49,7 +52,10 @@ export class BookingController {
       proofUrl = this.fileUploadService.generateFileUrl(
         paymentProof.filename,
         'payment-proof',
+        getRequestBaseUrl(req),
       );
+    } else if (dto.proofUrl) {
+      proofUrl = normalizeAssetUrl(dto.proofUrl, getRequestBaseUrl(req)) ?? dto.proofUrl;
     }
 
     // Parse startTime: accept ISO or time-only like "14.00" or "14:00"
@@ -95,11 +101,13 @@ export class BookingController {
       endTime: end.toISOString(),
       proofUrl,
       isDp: dto.isDp,
+      assetBaseUrl: getRequestBaseUrl(req),
     });
   }
 
   @Get('my-bookings')
   getMyBookings(
+    @Req() req: any,
     @CurrentUser('sub') customerId: string,
     @Query('status') status?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
@@ -109,15 +117,17 @@ export class BookingController {
       status,
       page,
       limit,
+      assetBaseUrl: getRequestBaseUrl(req),
     });
   }
 
   @Get(':id')
   findOne(
+    @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('sub') customerId: string,
   ) {
-    return this.bookingService.findOne(id, customerId);
+    return this.bookingService.findOne(id, customerId, getRequestBaseUrl(req));
   }
 
   @Post(':id/upload-payment')
@@ -126,6 +136,7 @@ export class BookingController {
     FileInterceptor('paymentProof', FileUploadService.multerConfigPaymentProof),
   )
   uploadPaymentProof(
+    @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('sub') customerId: string,
     @UploadedFile() paymentProof?: Express.Multer.File,
@@ -138,14 +149,18 @@ export class BookingController {
       proofUrl = this.fileUploadService.generateFileUrl(
         paymentProof.filename,
         'payment-proof',
+        getRequestBaseUrl(req),
       );
     } else if (dto?.proofUrl) {
-      proofUrl = dto.proofUrl;
+      proofUrl = normalizeAssetUrl(dto.proofUrl, getRequestBaseUrl(req)) ?? dto.proofUrl;
     } else {
       throw new BadRequestException('Payment proof file atau proofUrl harus disediakan');
     }
 
-    return this.bookingService.uploadPaymentProof(id, customerId, { proofUrl });
+    return this.bookingService.uploadPaymentProof(id, customerId, {
+      proofUrl,
+      assetBaseUrl: getRequestBaseUrl(req),
+    });
   }
 
   @Patch(':id/cancel')

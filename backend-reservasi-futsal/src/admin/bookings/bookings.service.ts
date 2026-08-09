@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoggerService } from '../../common/logger.service';
 import { EmailService } from '../../common/email.service';
+import { normalizeAssetUrl } from '../../common/network.util';
 import { VerifyPaymentDto } from './dto';
 import { BookingStatus, DayType, PaymentStatus } from '@prisma/client';
 
@@ -36,6 +37,24 @@ export class BookingsService {
     private emailService: EmailService,
   ) {}
 
+  private normalizeBookingResponse<T extends { payment?: { proofUrl?: string | null } | null; field?: any }>(
+    booking: T,
+    assetBaseUrl?: string,
+  ) {
+    return {
+      ...booking,
+      payment: booking.payment
+        ? {
+            ...booking.payment,
+            proofUrl:
+              normalizeAssetUrl(booking.payment.proofUrl, assetBaseUrl) ??
+              booking.payment.proofUrl ??
+              null,
+          }
+        : booking.payment,
+    };
+  }
+
   async findAll(params: {
     page?: number;
     limit?: number;
@@ -46,16 +65,9 @@ export class BookingsService {
     startDate?: string;
     endDate?: string;
     today?: boolean;
+    assetBaseUrl?: string;
   }) {
-    const {
-      page = 1,
-      limit = 10,
-      search,
-      status,
-      fieldId,
-      venueId,
-      today = false,
-    } = params;
+    const { page = 1, limit = 10, search, status, fieldId, venueId, today = false, assetBaseUrl } = params;
 
     let { startDate, endDate } = params as {
       startDate?: string;
@@ -145,7 +157,7 @@ export class BookingsService {
 
     return {
       message: 'Daftar booking berhasil diambil',
-      data: bookings,
+      data: bookings.map((booking) => this.normalizeBookingResponse(booking, assetBaseUrl)),
       meta: {
         total,
         page,
@@ -155,7 +167,7 @@ export class BookingsService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, assetBaseUrl?: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id },
       include: {
@@ -200,7 +212,7 @@ export class BookingsService {
 
     return {
       message: 'Detail booking berhasil diambil',
-      data: booking,
+      data: this.normalizeBookingResponse(booking, assetBaseUrl),
     };
   }
 
@@ -208,8 +220,9 @@ export class BookingsService {
     page?: number;
     limit?: number;
     venueId?: string;
+    assetBaseUrl?: string;
   }) {
-    const { page = 1, limit = 10, venueId } = params;
+    const { page = 1, limit = 10, venueId, assetBaseUrl } = params;
     const skip = (page - 1) * limit;
 
     const where: any = {
@@ -256,7 +269,7 @@ export class BookingsService {
 
     return {
       message: 'Daftar booking menunggu verifikasi berhasil diambil',
-      data: bookings,
+      data: bookings.map((booking) => this.normalizeBookingResponse(booking, assetBaseUrl)),
       meta: {
         total,
         page,
@@ -270,6 +283,7 @@ export class BookingsService {
     bookingId: string,
     dto: VerifyPaymentDto,
     adminId: string,
+    assetBaseUrl?: string,
   ) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
@@ -390,7 +404,12 @@ export class BookingsService {
       message: `Payment berhasil ${approved ? 'disetujui' : 'ditolak'}`,
       data: {
         booking: updatedBooking,
-        payment: updatedPayment,
+        payment: {
+          ...updatedPayment,
+          proofUrl:
+            normalizeAssetUrl(updatedPayment.proofUrl, assetBaseUrl) ??
+            updatedPayment.proofUrl,
+        },
       },
     };
   }
@@ -601,7 +620,7 @@ export class BookingsService {
 
     return {
       message: 'Booking offline berhasil dibuat',
-      data: booking,
+      data: this.normalizeBookingResponse(booking, undefined),
     };
   }
 
@@ -641,7 +660,7 @@ export class BookingsService {
 
     return {
       message: 'Pelunasan booking berhasil dicatat',
-      data: updatedBooking,
+      data: this.normalizeBookingResponse(updatedBooking, undefined),
     };
   }
 

@@ -85,6 +85,10 @@ export function normalizeAssetUrl(
     return null;
   }
 
+  if (url === 'OFFLINE_PAYMENT') {
+    return url;
+  }
+
   const effectiveBaseUrl =
     baseUrl ||
     process.env.PUBLIC_BASE_URL ||

@@ -7,6 +7,7 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { UploadPaymentProofDto, CancelBookingDto } from './dto/update-booking.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoggerService } from '../common/logger.service';
+import { normalizeAssetUrl } from '../common/network.util';
 import { BookingStatus, DayType, PaymentStatus } from '@prisma/client';
 import { EmailService } from '../common/email.service';
 
@@ -37,8 +38,33 @@ export class BookingService {
     private emailService: EmailService,
   ) {}
 
-  async create(dto: { customerId: string; fieldId: string; startTime: string; endTime: string; proofUrl?: string; isDp?: boolean }) {
-    const { customerId, fieldId, startTime, endTime, proofUrl, isDp = false } = dto;
+  private normalizeBookingResponse(booking: any, assetBaseUrl?: string) {
+    return {
+      ...booking,
+      field: booking.field
+        ? {
+            ...booking.field,
+            images: Array.isArray(booking.field.images)
+              ? booking.field.images.map((img: any) => ({
+                  ...img,
+                  imageUrl: normalizeAssetUrl(img.imageUrl, assetBaseUrl) ?? img.imageUrl,
+                }))
+              : booking.field.images,
+          }
+        : booking.field,
+      payment: booking.payment
+        ? {
+            ...booking.payment,
+            proofUrl: normalizeAssetUrl(booking.payment.proofUrl, assetBaseUrl) ?? booking.payment.proofUrl,
+          }
+        : booking.payment,
+      primaryImage: normalizeAssetUrl(booking.primaryImage, assetBaseUrl) ?? booking.primaryImage,
+    };
+  }
+
+  async create(dto: { customerId: string; fieldId: string; startTime: string; endTime: string; proofUrl?: string; isDp?: boolean; assetBaseUrl?: string }) {
+    const { customerId, fieldId, startTime, endTime, proofUrl, isDp = false, assetBaseUrl } = dto;
+    const normalizedProofUrl = normalizeAssetUrl(proofUrl, assetBaseUrl) ?? proofUrl;
 
     // Validasi customer exists
     const customer = await this.prisma.customer.findUnique({
@@ -150,11 +176,11 @@ export class BookingService {
         dpAmount,
         paidAmount: 0,
         status: initialStatus,
-        ...(proofUrl
+        ...(normalizedProofUrl
           ? {
               payment: {
                 create: {
-                  proofUrl,
+                  proofUrl: normalizedProofUrl,
                   status: PaymentStatus.WAITING_VERIFICATION,
                 },
               },
@@ -194,7 +220,7 @@ export class BookingService {
       },
     });
 
-    const logMessage = proofUrl
+    const logMessage = normalizedProofUrl
       ? `Booking created with payment proof: ${booking.id} by customer ${customer.name}`
       : `Booking created: ${booking.id} by customer ${customer.name}`;
 
@@ -224,12 +250,11 @@ export class BookingService {
     return {
       message: 'Booking berhasil dibuat',
       data: {
-        ...booking,
+        ...this.normalizeBookingResponse(booking, assetBaseUrl),
         bookingNumber,
         displayStatus,
         durationHours,
         fieldName: booking.field.name,
-        primaryImage: booking.field.images[0]?.imageUrl || null,
       },
     };
   }
@@ -291,8 +316,9 @@ export class BookingService {
     status?: string;
     page?: number;
     limit?: number;
+    assetBaseUrl?: string;
   }) {
-    const { status, page = 1, limit = 20 } = params || {};
+    const { status, page = 1, limit = 20, assetBaseUrl } = params || {};
     const skip = (page - 1) * limit;
 
     const where: any = {
@@ -394,7 +420,7 @@ export class BookingService {
     return statusMap[status] || { label: status, color: 'default' };
   }
 
-  async findOne(id: string, customerId?: string) {
+  async findOne(id: string, customerId?: string, assetBaseUrl?: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id },
       include: {
@@ -457,17 +483,18 @@ export class BookingService {
     return {
       message: 'Detail booking berhasil diambil',
       data: {
-        ...booking,
+        ...this.normalizeBookingResponse(booking, assetBaseUrl),
         bookingNumber,
         displayStatus,
         durationHours,
         fieldName: booking.field.name,
-        primaryImage: booking.field.images[0]?.imageUrl || null,
       },
     };
   }
 
-  async uploadPaymentProof(bookingId: string, customerId: string, dto: UploadPaymentProofDto) {
+  async uploadPaymentProof(bookingId: string, customerId: string, dto: UploadPaymentProofDto & { assetBaseUrl?: string }) {
+    const { assetBaseUrl, proofUrl } = dto;
+    const normalizedProofUrl = normalizeAssetUrl(proofUrl, assetBaseUrl) ?? proofUrl;
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       include: { payment: true },
@@ -495,7 +522,7 @@ export class BookingService {
       payment = await this.prisma.payment.update({
         where: { id: booking.payment.id },
         data: {
-          proofUrl: dto.proofUrl,
+          proofUrl: normalizedProofUrl,
           status: PaymentStatus.WAITING_VERIFICATION,
         },
       });
@@ -503,7 +530,7 @@ export class BookingService {
       payment = await this.prisma.payment.create({
         data: {
           bookingId,
-          proofUrl: dto.proofUrl,
+          proofUrl: normalizedProofUrl,
           status: PaymentStatus.WAITING_VERIFICATION,
         },
       });
@@ -532,7 +559,10 @@ export class BookingService {
       message: 'Bukti pembayaran berhasil diupload',
       data: {
         booking: updatedBooking,
-        payment,
+        payment: {
+          ...payment,
+          proofUrl: normalizeAssetUrl(payment.proofUrl, assetBaseUrl) ?? payment.proofUrl,
+        },
       },
     };
   }
