@@ -1,6 +1,7 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query, Req } from '@nestjs/common';
 import { MobileFieldsService } from './mobile-fields.service';
 import { GetMobileFieldsQueryDto } from './dto/get-mobile-fields.query.dto';
+import { getRequestBaseUrl } from '../common/network.util';
 
 @Controller('mobile/fields')
 export class MobileFieldsController {
@@ -17,15 +18,22 @@ export class MobileFieldsController {
    * - /api/v1/mobile/fields?startTime=2026-01-09T19:00:00%2B07:00&endTime=2026-01-09T20:00:00%2B07:00
    */
   @Get()
-  list(@Query() query: GetMobileFieldsQueryDto) {
-    return this.mobileFieldsService.listMobileFields(query);
+  list(@Req() req: any, @Query() query: GetMobileFieldsQueryDto) {
+    return this.mobileFieldsService.listMobileFields({
+      ...query,
+      assetBaseUrl: getRequestBaseUrl(req),
+    });
   }
 
   @Get(':id')
   detail(
+    @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: GetMobileFieldsQueryDto,
   ) {
-    return this.mobileFieldsService.getMobileFieldDetail(id, query);
+    return this.mobileFieldsService.getMobileFieldDetail(id, {
+      ...query,
+      assetBaseUrl: getRequestBaseUrl(req),
+    });
   }
 }

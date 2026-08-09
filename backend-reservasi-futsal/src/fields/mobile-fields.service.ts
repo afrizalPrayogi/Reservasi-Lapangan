@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { BookingStatus, DayType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { normalizeAssetUrl } from '../common/network.util';
 
 function isWeekend(date: Date) {
   const day = date.getDay();
@@ -60,6 +61,23 @@ function parseLocalDateYYYYMMDD(value: string): { year: number; month: number; d
 @Injectable()
 export class MobileFieldsService {
   constructor(private prisma: PrismaService) {}
+
+  private normalizeFieldAssets(field: any, assetBaseUrl?: string) {
+    const images = Array.isArray(field.images)
+      ? field.images.map((img: any) => ({
+          ...img,
+          imageUrl: normalizeAssetUrl(img.imageUrl, assetBaseUrl) ?? img.imageUrl,
+        }))
+      : [];
+
+    const imageUrl = normalizeAssetUrl(field.images?.[0]?.imageUrl ?? null, assetBaseUrl);
+
+    return {
+      ...field,
+      imageUrl,
+      images,
+    };
+  }
 
   private resolveSlot(params: {
     startTime?: string;
@@ -163,8 +181,10 @@ export class MobileFieldsService {
     onlyAvailable?: boolean;
     page?: number;
     limit?: number;
+    assetBaseUrl?: string;
   }) {
-    const { start, end } = this.resolveSlot(params);
+    const { assetBaseUrl, ...slotParams } = params;
+    const { start, end } = this.resolveSlot(slotParams);
     const where: any = {
       isActive: true,
       ...(params.search
@@ -216,13 +236,13 @@ export class MobileFieldsService {
           slotStart: start,
         });
 
-        const primaryImageUrl = f.images?.[0]?.imageUrl ?? null;
+        const normalizedField = this.normalizeFieldAssets(f, assetBaseUrl);
 
         return {
           id: f.id,
           name: f.name,
           type: f.type,
-          imageUrl: primaryImageUrl,
+          imageUrl: normalizedField.imageUrl,
           size: {
             lengthMeter: f.lengthMeter ?? null,
             widthMeter: f.widthMeter ?? null,
@@ -235,7 +255,7 @@ export class MobileFieldsService {
             startHour: item.startHour,
             endHour: item.endHour,
           })),
-          images: f.images.map((img) => ({
+          images: normalizedField.images.map((img) => ({
             id: img.id,
             imageUrl: img.imageUrl,
             isPrimary: img.isPrimary,
@@ -282,9 +302,11 @@ export class MobileFieldsService {
       date?: string;
       startHour?: number;
       durationHours?: number;
+      assetBaseUrl?: string;
     },
   ) {
-    const { start, end } = this.resolveSlot(params);
+    const { assetBaseUrl, ...slotParams } = params;
+    const { start, end } = this.resolveSlot(slotParams);
 
     const field = await this.prisma.field.findUnique({
       where: { id },
@@ -382,7 +404,7 @@ export class MobileFieldsService {
         id: field.id,
         name: field.name,
         type: field.type,
-        imageUrl: field.images?.[0]?.imageUrl ?? null,
+        imageUrl: this.normalizeFieldAssets(field, assetBaseUrl).imageUrl,
         size: {
           lengthMeter: field.lengthMeter ?? null,
           widthMeter: field.widthMeter ?? null,
@@ -396,7 +418,7 @@ export class MobileFieldsService {
           endHour: item.endHour,
         })),
         bookedHours,
-        images: field.images.map((img) => ({
+        images: this.normalizeFieldAssets(field, assetBaseUrl).images.map((img) => ({
           id: img.id,
           imageUrl: img.imageUrl,
           isPrimary: img.isPrimary,

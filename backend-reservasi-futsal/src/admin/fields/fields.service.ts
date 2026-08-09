@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoggerService } from '../../common/logger.service';
+import { normalizeAssetUrl } from '../../common/network.util';
 import {
   CreateFieldDto,
   CreateFieldPriceDto,
@@ -142,7 +143,26 @@ export class FieldsService {
     }
   }
 
-  async create(dto: CreateFieldDto) {
+  private normalizeFieldAssets(field: any, assetBaseUrl?: string) {
+    const images = Array.isArray(field.images)
+      ? field.images.map((img: any) => ({
+          ...img,
+          imageUrl: normalizeAssetUrl(img.imageUrl, assetBaseUrl) ?? img.imageUrl,
+        }))
+      : [];
+
+    const imageUrls = images
+      .map((img: any) => img.imageUrl)
+      .filter((url: unknown): url is string => typeof url === 'string' && url.length > 0);
+
+    return {
+      ...field,
+      images,
+      imageUrls,
+    };
+  }
+
+  async create(dto: CreateFieldDto, assetBaseUrl?: string) {
     const {
       name,
       type,
@@ -239,7 +259,7 @@ export class FieldsService {
 
     return {
       message: 'Field berhasil dibuat',
-      data: field,
+      data: this.normalizeFieldAssets(field, assetBaseUrl),
     };
   }
 
@@ -249,14 +269,9 @@ export class FieldsService {
     search?: string;
     type?: string;
     isActive?: boolean;
+    assetBaseUrl?: string;
   }) {
-    const {
-      page = 1,
-      limit = 10,
-      search,
-      type,
-      isActive,
-    } = params;
+    const { page = 1, limit = 10, search, type, isActive, assetBaseUrl } = params;
 
     const skip = (page - 1) * limit;
 
@@ -288,7 +303,7 @@ export class FieldsService {
 
     return {
       message: 'Daftar field berhasil diambil',
-      data: fields,
+      data: fields.map((field) => this.normalizeFieldAssets(field, assetBaseUrl)),
       meta: {
         total,
         page,
@@ -298,7 +313,7 @@ export class FieldsService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, assetBaseUrl?: string) {
     const field = await this.prisma.field.findUnique({
       where: { id },
       include: {
@@ -315,11 +330,11 @@ export class FieldsService {
 
     return {
       message: 'Detail field berhasil diambil',
-      data: field,
+      data: this.normalizeFieldAssets(field, assetBaseUrl),
     };
   }
 
-  async update(id: string, dto: UpdateFieldDto) {
+  async update(id: string, dto: UpdateFieldDto, assetBaseUrl?: string) {
     console.log(dto);
     const existing = await this.prisma.field.findUnique({ where: { id } });
     if (!existing) {
@@ -459,7 +474,7 @@ export class FieldsService {
 
     return {
       message: 'Field berhasil diupdate',
-      data: field,
+      data: this.normalizeFieldAssets(field, assetBaseUrl),
     };
   }
 

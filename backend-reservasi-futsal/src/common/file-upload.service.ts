@@ -81,10 +81,14 @@ export class FileUploadService {
   };
 
   // Helper untuk generate URL dari file path
-  generateFileUrl(filename: string, type: 'payment-proof' | 'field-image'): string {
-    const baseUrl = getBaseUrl();
+  generateFileUrl(
+    filename: string,
+    type: 'payment-proof' | 'field-image',
+    baseUrl?: string,
+  ): string {
+    const resolvedBaseUrl = (baseUrl || getBaseUrl()).replace(/\/+$/, '');
     const folder = type === 'payment-proof' ? 'payment-proofs' : 'field-images';
-    return `${baseUrl}/uploads/${folder}/${filename}`;
+    return `${resolvedBaseUrl}/uploads/${folder}/${filename}`;
   }
 
   // Validasi file image

@@ -13,12 +13,14 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileUploadService } from '../../common/file-upload.service';
+import { getRequestBaseUrl } from '../../common/network.util';
 import { FieldsService } from './fields.service';
 import {
   CreateFieldDto,
@@ -42,9 +44,14 @@ export class FieldsController {
   @Roles('Super Admin', 'Administrator', 'Admin')
   uploadImage(
     @UploadedFile() file: Express.Multer.File,
+    @Req() req: any,
   ) {
     this.fileUploadService.validateImageFile(file);
-    const imageUrl = this.fileUploadService.generateFileUrl(file.filename, 'field-image');
+    const imageUrl = this.fileUploadService.generateFileUrl(
+      file.filename,
+      'field-image',
+      getRequestBaseUrl(req),
+    );
     return {
       message: 'Gambar berhasil diupload',
       data: {
@@ -56,13 +63,14 @@ export class FieldsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @Roles('Super Admin', 'Administrator')
-  create(@Body() dto: CreateFieldDto) {
-    return this.fieldsService.create(dto);
+  create(@Req() req: any, @Body() dto: CreateFieldDto) {
+    return this.fieldsService.create(dto, getRequestBaseUrl(req));
   }
 
   @Get()
   @Roles('Super Admin', 'Administrator', 'Admin')
   findAll(
+    @Req() req: any,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('search') search?: string,
@@ -76,22 +84,24 @@ export class FieldsController {
       search,
       type,
       isActive,
+      assetBaseUrl: getRequestBaseUrl(req),
     });
   }
 
   @Get(':id')
   @Roles('Super Admin', 'Administrator', 'Admin')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.fieldsService.findOne(id);
+  findOne(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    return this.fieldsService.findOne(id, getRequestBaseUrl(req));
   }
 
   @Patch(':id')
   @Roles('Super Admin', 'Administrator')
   update(
+    @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateFieldDto,
   ) {
-    return this.fieldsService.update(id, dto);
+    return this.fieldsService.update(id, dto, getRequestBaseUrl(req));
   }
 
   @Delete(':id')
