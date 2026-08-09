@@ -11,7 +11,7 @@ export class CreateFieldOperationalHourDto {
   startHour: number;
 
   @IsInt()
-  @Min(24)
+  @Min(1)
   @Max(24)
   endHour: number;
 }

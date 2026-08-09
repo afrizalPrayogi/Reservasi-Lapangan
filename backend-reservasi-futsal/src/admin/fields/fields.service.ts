@@ -44,8 +44,8 @@ export class FieldsService {
   }) {
     const { startHour, endHour } = input;
 
-    if (endHour !== 24) {
-      throw new BadRequestException('Jam tutup operasional harus 24:00');
+    if (endHour < 1 || endHour > 24) {
+      throw new BadRequestException('Jam tutup operasional harus di rentang 1-24');
     }
 
     if (startHour < 0 || startHour > 23) {

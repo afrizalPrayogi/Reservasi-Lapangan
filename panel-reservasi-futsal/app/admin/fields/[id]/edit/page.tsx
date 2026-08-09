@@ -227,7 +227,8 @@ export default function EditFieldPage() {
 
       if (!Number.isFinite(start) || start < 0 || start > 23)
         return setFormError('Jam buka harus 0-23');
-      if (end !== 24) return setFormError('Jam tutup operasional harus 24:00');
+      if (!Number.isFinite(end) || end < 1 || end > 24)
+        return setFormError('Jam tutup harus 1-24');
       if (start >= end) return setFormError('Jam buka harus lebih kecil dari jam tutup');
 
       openingHours.push({
@@ -566,7 +567,7 @@ export default function EditFieldPage() {
                 </Text>
               </div>
               <Text variant="caption" className="text-gray-500 block mb-4">
-                Atur jam buka untuk Weekday dan Weekend. Jam tutup selalu 24:00.
+                Atur jam buka dan jam tutup untuk Weekday dan Weekend. Jam tutup maksimal 24:00.
               </Text>
 
               <div className="space-y-3">
@@ -617,17 +618,25 @@ export default function EditFieldPage() {
                         <label className="block text-xs text-gray-600 mb-1">Sampai Jam</label>
                         <input
                           type="number"
-                          min="24"
+                          min="1"
                           max="24"
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-100 text-gray-500 focus:outline-none"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                           value={row.endHour}
-                          readOnly
+                          onChange={(e) =>
+                            setOpeningHourRows((rows) =>
+                              rows.map((item) =>
+                                item.id === row.id
+                                  ? { ...item, endHour: e.target.value }
+                                  : item
+                              )
+                            )
+                          }
                         />
                       </div>
 
                       <div className="flex items-end">
                         <div className="text-xs text-gray-500">
-                          Jam tutup tetap 24:00
+                          Jam tutup bisa diatur sampai 24:00
                         </div>
                       </div>
                     </div>
