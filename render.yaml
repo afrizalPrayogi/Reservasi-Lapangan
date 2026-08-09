@@ -12,7 +12,7 @@ services:
     plan: free
     rootDir: backend-reservasi-futsal
     buildCommand: npm install && npx prisma generate && npx prisma db push --accept-data-loss && npm run build
-    startCommand: node dist/main
+    startCommand: node dist/src/main
     envVars:
       - key: NODE_VERSION
         value: 20
