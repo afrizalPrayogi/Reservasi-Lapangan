@@ -1,0 +1,61 @@
+# Render Blueprint - Reservasi Futsal
+# https://render.com/docs/blueprint-spec
+
+services:
+  # ================================
+  # Backend API (NestJS)
+  # ================================
+  - type: web
+    name: reservasi-futsal-backend
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: backend-reservasi-futsal
+    buildCommand: npm install && npx prisma generate && npx prisma db push --accept-data-loss && npm run build
+    startCommand: node dist/main
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: DATABASE_URL
+        sync: false # Set manually in Render dashboard
+      - key: PORT
+        value: 4000
+      - key: HOST
+        value: 0.0.0.0
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: JWT_SECRET
+        generateValue: true # Render auto-generate random secret
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_SECURE
+        value: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM_NAME
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+
+  # ================================
+  # Panel Admin (Next.js)
+  # ================================
+  - type: web
+    name: reservasi-futsal-panel
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: panel-reservasi-futsal
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: BACKEND_INTERNAL_URL
+        sync: false # Set to backend's Render URL after deploy
+      - key: PORT
+        value: 3000
