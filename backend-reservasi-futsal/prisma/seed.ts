@@ -75,6 +75,12 @@ async function main() {
               { dayType: 'WEEKDAY', startHour: 0, endHour: 24, price: 150000 },
               { dayType: 'WEEKEND', startHour: 0, endHour: 24, price: 150000 }
             ]
+          },
+          openingHours: {
+            create: [
+              { dayType: 'WEEKDAY', startHour: 6, endHour: 24 },
+              { dayType: 'WEEKEND', startHour: 6, endHour: 24 }
+            ]
           }
         }
       });

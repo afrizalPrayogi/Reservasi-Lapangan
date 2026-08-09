@@ -7,7 +7,7 @@ import 'package:reservasi_futsal/app/data/repository/field_repository.dart';
 class FieldDetailController extends GetxController {
   final FieldRepository _fieldRepository = Get.find<FieldRepository>();
 
-  late Field field;
+  Field? field;
 
   final durationHours = 1.obs;
   final selectedStartTime = '19:00'.obs;
@@ -22,14 +22,47 @@ class FieldDetailController extends GetxController {
     selectedDate.value = DateTime.now().add(const Duration(days: 1));
   }
 
-  final List<String> times = List.generate(17, (index) {
-    final hour = (8 + index) % 24;
-    return hour.toString().padLeft(2, '0') + ':00';
-  });
+  List<FieldOperationalHour> get _currentOperationalHours {
+    final dayType = _selectedDayType;
+    final currentField = field;
+    final matching = currentField?.operationalHours
+            .where((item) => item.dayType.toUpperCase() == dayType)
+            .toList() ??
+        [];
+    if (matching.isNotEmpty) {
+      return matching;
+    }
+
+    return [
+      FieldOperationalHour(id: 'fallback-weekday', dayType: 'WEEKDAY', startHour: 6, endHour: 24),
+      FieldOperationalHour(id: 'fallback-weekend', dayType: 'WEEKEND', startHour: 6, endHour: 24),
+    ];
+  }
+
+  String get _selectedDayType {
+    final date = selectedDate.value ?? DateTime.now();
+    return date.weekday >= 6 ? 'WEEKEND' : 'WEEKDAY';
+  }
+
+  List<String> get times {
+    final row = _currentOperationalHours.firstWhere(
+      (item) => item.dayType.toUpperCase() == _selectedDayType,
+    );
+    final lastStart = row.endHour - durationHours.value;
+    if (lastStart < row.startHour) {
+      return [];
+    }
+
+    return List.generate(lastStart - row.startHour + 1, (index) {
+      final hour = row.startHour + index;
+      return hour.toString().padLeft(2, '0') + ':00';
+    });
+  }
 
   List<String> get galleryUrls {
-    if (field.imageUrls.length > 1) {
-      return field.imageUrls.sublist(1);
+    final currentField = field;
+    if (currentField != null && currentField.imageUrls.length > 1) {
+      return currentField.imageUrls.sublist(1);
     }
     return [];
   }
@@ -42,11 +75,13 @@ class FieldDetailController extends GetxController {
 
   void incrementDuration() {
     durationHours.value++;
+    _ensureSelectedTimeIsValid();
   }
 
   void decrementDuration() {
     if (durationHours.value > 1) {
       durationHours.value--;
+      _ensureSelectedTimeIsValid();
     }
   }
 
@@ -58,13 +93,32 @@ class FieldDetailController extends GetxController {
     selectedStartTime.value = time;
   }
 
+  void _ensureSelectedTimeIsValid() {
+    final availableTimes = times;
+    if (availableTimes.isEmpty) {
+      selectedStartTime.value = '';
+      return;
+    }
+
+    if (!availableTimes.contains(selectedStartTime.value)) {
+      selectedStartTime.value = availableTimes.firstWhere(
+        (time) {
+          final hour = int.tryParse(time.split(':')[0]) ?? -1;
+          return !bookedHours.contains(hour);
+        },
+        orElse: () => availableTimes.first,
+      );
+    }
+  }
+
   Future<void> fetchBookedHours() async {
-    if (selectedDate.value == null) return;
+    if (selectedDate.value == null || field == null) return;
     isLoadingDetail.value = true;
     try {
       final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate.value!);
-      final updatedField = await _fieldRepository.getFieldById(field.id, date: dateStr);
+      final updatedField = await _fieldRepository.getFieldById(field!.id, date: dateStr);
       bookedHours.value = updatedField.bookedHours;
+      field = updatedField;
 
       // Jika jam mulai saat ini sudah dibooking pada tanggal baru, pilih jam kosong pertama
       final currentSelectedHour = int.tryParse(selectedStartTime.value.split(':')[0]) ?? -1;
@@ -79,6 +133,7 @@ class FieldDetailController extends GetxController {
         }
         selectedStartTime.value = firstAvailableTime ?? '';
       }
+      _ensureSelectedTimeIsValid();
     } catch (e) {
       print('❌ Error fetching booked hours: $e');
     } finally {

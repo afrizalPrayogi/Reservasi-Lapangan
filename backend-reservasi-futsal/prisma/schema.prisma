@@ -70,6 +70,7 @@ model Field {
   widthMeter  Float?        // lebar lapangan (meter)
 
   prices                                                FieldPrice[]
+  openingHours                                          FieldOpeningHour[]
   bookings                                              Booking[]
   images      FieldImage[] // ⬅️ relasi ke gambar
 
@@ -116,6 +117,21 @@ model FieldPrice {
   field     Field    @relation(fields: [fieldId], references: [id])
 
   createdAt DateTime  @default(now())
+}
+
+model FieldOpeningHour {
+  id        String   @id @default(uuid())
+  fieldId   String
+
+  dayType   DayType
+  startHour Int
+  endHour   Int      @default(24)
+
+  field     Field    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([fieldId, dayType])
 }
 
 enum DayType {

@@ -8,6 +8,12 @@ export interface FieldPrice {
   price: number;
 }
 
+export interface FieldOpeningHour {
+  dayType: 'WEEKDAY' | 'WEEKEND';
+  startHour: number;
+  endHour: number;
+}
+
 export interface Field {
   id: string;
   venueId?: string;
@@ -18,6 +24,7 @@ export interface Field {
   widthMeter?: number;
   imageUrls?: string[];
   prices?: FieldPrice[];
+  openingHours?: FieldOpeningHour[];
   // Legacy fields for backward compatibility
   pricePerHour?: number;
   isAvailable?: boolean;

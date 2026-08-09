@@ -7,6 +7,12 @@ export interface FieldPrice {
   price: number;
 }
 
+export interface FieldOpeningHour {
+  dayType: 'WEEKDAY' | 'WEEKEND';
+  startHour: number;
+  endHour: number;
+}
+
 export interface CreateFieldPayload {
   venueId: string;
   name: string;
@@ -16,6 +22,7 @@ export interface CreateFieldPayload {
   widthMeter: number;
   imageUrls: string[];
   prices: FieldPrice[];
+  openingHours: FieldOpeningHour[];
 }
 
 export interface UpdateFieldPayload extends Partial<CreateFieldPayload> {
@@ -32,6 +39,7 @@ export interface FieldResponse {
   widthMeter: number;
   imageUrls: string[];
   prices: FieldPrice[];
+  openingHours: FieldOpeningHour[];
   images?: any[];
   createdAt?: string;
   updatedAt?: string;
@@ -55,6 +63,7 @@ class FieldService {
       return fields.map((field: any) => ({
         ...field,
         imageUrls: field.imageUrls || field.images?.map((img: any) => img.imageUrl) || [],
+        openingHours: field.openingHours || [],
       }));
     }
     return [];
@@ -69,6 +78,7 @@ class FieldService {
     return {
       ...field,
       imageUrls: field.imageUrls || field.images?.map((img: any) => img.imageUrl) || [],
+      openingHours: field.openingHours || [],
     };
   }
 
@@ -81,6 +91,7 @@ class FieldService {
     return {
       ...field,
       imageUrls: field.imageUrls || field.images?.map((img: any) => img.imageUrl) || [],
+      openingHours: field.openingHours || [],
     };
   }
 
@@ -93,6 +104,7 @@ class FieldService {
     return {
       ...field,
       imageUrls: field.imageUrls || field.images?.map((img: any) => img.imageUrl) || [],
+      openingHours: field.openingHours || [],
     };
   }
 

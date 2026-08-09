@@ -604,39 +604,42 @@ class PaymentSummaryView extends GetView<PaymentSummaryController> {
             );
           }),
           const SizedBox(height: 14),
-          InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: controller.pickProof,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.grey[350]!, width: 1),
-              ),
-              child: const Column(
-                children: [
-                  Icon(Icons.upload, color: Color(0xFF0D1B3E)),
-                  SizedBox(height: 10),
-                  Text(
-                    'Pilih File Bukti',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0D1B3E),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: controller.pickProof,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.grey[350]!, width: 1),
+                ),
+                child: const Column(
+                  children: [
+                    Icon(Icons.upload, color: Color(0xFF0D1B3E)),
+                    SizedBox(height: 10),
+                    Text(
+                      'Pilih File Bukti',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0D1B3E),
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 6),
-                  Text(
-                    'Format : Jpg/Png',
-                    style: TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
-                ],
+                    SizedBox(height: 6),
+                    Text(
+                      'Format : Jpg/Png',
+                      style: TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
           Obx(
-            () => controller.proofFile.value != null
+            () => controller.proofBytes.value != null
                 ? Column(
                     children: [
                       const SizedBox(height: 10),
@@ -645,37 +648,21 @@ class PaymentSummaryView extends GetView<PaymentSummaryController> {
                         child: SizedBox(
                           width: double.infinity,
                           height: 160,
-                          child: kIsWeb
-                              ? Image.network(
-                                  controller.proofFile.value!.path,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      color: Colors.grey[200],
-                                      child: const Center(
-                                        child: Icon(
-                                          Icons.image,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                )
-                              : Image.file(
-                                  File(controller.proofFile.value!.path),
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      color: Colors.grey[200],
-                                      child: const Center(
-                                        child: Icon(
-                                          Icons.image,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                    );
-                                  },
+                          child: Image.memory(
+                            controller.proofBytes.value!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey[200],
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.image,
+                                    color: Colors.grey,
+                                  ),
                                 ),
+                              );
+                            },
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),

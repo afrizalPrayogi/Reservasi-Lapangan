@@ -7,6 +7,7 @@ class Field {
   final bool isAvailable;
   final List<String> imageUrls;
   final List<int> bookedHours;
+  final List<FieldOperationalHour> operationalHours;
 
   Field({
     required this.id,
@@ -17,6 +18,7 @@ class Field {
     required this.isAvailable,
     this.imageUrls = const [],
     this.bookedHours = const [],
+    this.operationalHours = const [],
   });
 
   factory Field.fromJson(Map<String, dynamic> json) {
@@ -78,6 +80,18 @@ class Field {
       }
     }
 
+    final dynamic rawOperationalHours = json['operationalHours'] ?? json['operational_hours'];
+    final List<FieldOperationalHour> operationalHours = [];
+    if (rawOperationalHours is List) {
+      for (final item in rawOperationalHours) {
+        if (item is Map) {
+          operationalHours.add(
+            FieldOperationalHour.fromJson(Map<String, dynamic>.from(item)),
+          );
+        }
+      }
+    }
+
     return Field(
       id: id,
       name: name,
@@ -87,6 +101,7 @@ class Field {
       isAvailable: isAvailable,
       imageUrls: imageUrls,
       bookedHours: bookedHours,
+      operationalHours: operationalHours,
     );
   }
 
@@ -99,5 +114,40 @@ class Field {
     'is_available': isAvailable,
     'images': imageUrls.map((url) => {'imageUrl': url}).toList(),
     'booked_hours': bookedHours,
+    'operational_hours': operationalHours.map((hour) => hour.toJson()).toList(),
+  };
+}
+
+class FieldOperationalHour {
+  final String id;
+  final String dayType;
+  final int startHour;
+  final int endHour;
+
+  FieldOperationalHour({
+    required this.id,
+    required this.dayType,
+    required this.startHour,
+    required this.endHour,
+  });
+
+  factory FieldOperationalHour.fromJson(Map<String, dynamic> json) {
+    return FieldOperationalHour(
+      id: (json['id'] ?? '').toString(),
+      dayType: (json['dayType'] ?? json['day_type'] ?? '').toString(),
+      startHour: (json['startHour'] is num)
+          ? (json['startHour'] as num).toInt()
+          : (int.tryParse((json['startHour'] ?? '0').toString()) ?? 0),
+      endHour: (json['endHour'] is num)
+          ? (json['endHour'] as num).toInt()
+          : (int.tryParse((json['endHour'] ?? '24').toString()) ?? 24),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'dayType': dayType,
+    'startHour': startHour,
+    'endHour': endHour,
   };
 }

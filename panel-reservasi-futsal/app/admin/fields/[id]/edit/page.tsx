@@ -6,7 +6,7 @@ import { ArrowLeft, Plus, X, Trash2 } from 'lucide-react';
 import { DashboardLayout } from '@/components/templates';
 import { Button, Card, Input, Text } from '@/components/atoms';
 import { useAuthStore, useFieldStore } from '@/stores';
-import type { Field, FieldPrice } from '@/stores/fieldStore';
+import type { FieldPrice, FieldOpeningHour } from '@/stores/fieldStore';
 import { fieldService } from '@/services';
 
 type FieldFormState = {
@@ -18,6 +18,7 @@ type FieldFormState = {
   widthMeter: string;
   imageUrls: string[];
   prices: FieldPrice[];
+  openingHours: FieldOpeningHour[];
 };
 
 type PriceFormRow = {
@@ -26,6 +27,13 @@ type PriceFormRow = {
   startHour: string;
   endHour: string;
   price: string;
+};
+
+type OpeningHourFormRow = {
+  id: string;
+  dayType: 'WEEKDAY' | 'WEEKEND';
+  startHour: string;
+  endHour: string;
 };
 
 const defaultImage =
@@ -50,6 +58,7 @@ export default function EditFieldPage() {
     widthMeter: '25',
     imageUrls: ['', '', '', ''],
     prices: [],
+    openingHours: [],
   });
 
   const updateImageUrl = (idx: number, val: string) => {
@@ -80,6 +89,7 @@ export default function EditFieldPage() {
   };
 
   const [priceRows, setPriceRows] = useState<PriceFormRow[]>([]);
+  const [openingHourRows, setOpeningHourRows] = useState<OpeningHourFormRow[]>([]);
   const [formError, setFormError] = useState<string>('');
   const [loadError, setLoadError] = useState<string>('');
 
@@ -115,6 +125,7 @@ export default function EditFieldPage() {
         widthMeter: String(field.widthMeter || 25),
         imageUrls: urls.slice(0, 4),
         prices: field.prices || [],
+        openingHours: field.openingHours || [],
       });
 
       const rows: PriceFormRow[] = (field.prices || []).map((p, i) => ({
@@ -130,6 +141,21 @@ export default function EditFieldPage() {
           : [
               { id: '1', dayType: 'WEEKDAY', startHour: '0', endHour: '24', price: '150000' },
               { id: '2', dayType: 'WEEKEND', startHour: '0', endHour: '24', price: '150000' }
+            ]
+      );
+
+      const openingRows: OpeningHourFormRow[] = (field.openingHours || []).map((item, i) => ({
+        id: String(i + 1),
+        dayType: item.dayType,
+        startHour: String(item.startHour),
+        endHour: String(item.endHour ?? 24),
+      }));
+      setOpeningHourRows(
+        openingRows.length > 0
+          ? openingRows
+          : [
+              { id: '1', dayType: 'WEEKDAY', startHour: '6', endHour: '24' },
+              { id: '2', dayType: 'WEEKEND', startHour: '6', endHour: '24' },
             ]
       );
     } catch (err: any) {
@@ -194,6 +220,27 @@ export default function EditFieldPage() {
       return setFormError('Minimal 1 harga harus diisi');
     }
 
+    const openingHours: FieldOpeningHour[] = [];
+    for (const row of openingHourRows) {
+      const start = Number(row.startHour);
+      const end = Number(row.endHour);
+
+      if (!Number.isFinite(start) || start < 0 || start > 23)
+        return setFormError('Jam buka harus 0-23');
+      if (end !== 24) return setFormError('Jam tutup operasional harus 24:00');
+      if (start >= end) return setFormError('Jam buka harus lebih kecil dari jam tutup');
+
+      openingHours.push({
+        dayType: row.dayType,
+        startHour: start,
+        endHour: end,
+      });
+    }
+
+    if (openingHours.length === 0) {
+      return setFormError('Minimal 1 jam operasional harus diisi');
+    }
+
     const cleanedUrls = form.imageUrls.map((u) => u.trim()).filter(Boolean);
     const payload = {
       venueId: form.venueId,
@@ -204,6 +251,7 @@ export default function EditFieldPage() {
       widthMeter,
       imageUrls: cleanedUrls.length > 0 ? cleanedUrls : [defaultImage],
       prices,
+      openingHours,
     };
 
     try {
@@ -503,6 +551,84 @@ export default function EditFieldPage() {
                         >
                           <Trash2 size={16} />
                         </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+            {/* Operational Hours */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <Text variant="h4" className="font-bold">
+                  Jam Operasional
+                </Text>
+              </div>
+              <Text variant="caption" className="text-gray-500 block mb-4">
+                Atur jam buka untuk Weekday dan Weekend. Jam tutup selalu 24:00.
+              </Text>
+
+              <div className="space-y-3">
+                {openingHourRows.map((row) => (
+                  <Card key={row.id} className="p-3 bg-gray-50" padding="none">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Hari</label>
+                        <select
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                          value={row.dayType}
+                          onChange={(e) =>
+                            setOpeningHourRows((rows) =>
+                              rows.map((item) =>
+                                item.id === row.id
+                                  ? { ...item, dayType: e.target.value as 'WEEKDAY' | 'WEEKEND' }
+                                  : item
+                              )
+                            )
+                          }
+                        >
+                          <option value="WEEKDAY">Weekday</option>
+                          <option value="WEEKEND">Weekend</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Dari Jam</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="23"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                          value={row.startHour}
+                          onChange={(e) =>
+                            setOpeningHourRows((rows) =>
+                              rows.map((item) =>
+                                item.id === row.id
+                                  ? { ...item, startHour: e.target.value }
+                                  : item
+                              )
+                            )
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Sampai Jam</label>
+                        <input
+                          type="number"
+                          min="24"
+                          max="24"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-100 text-gray-500 focus:outline-none"
+                          value={row.endHour}
+                          readOnly
+                        />
+                      </div>
+
+                      <div className="flex items-end">
+                        <div className="text-xs text-gray-500">
+                          Jam tutup tetap 24:00
+                        </div>
                       </div>
                     </div>
                   </Card>

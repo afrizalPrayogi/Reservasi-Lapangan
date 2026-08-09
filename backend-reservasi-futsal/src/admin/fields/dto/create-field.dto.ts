@@ -16,6 +16,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CreateFieldPriceDto } from './create-field-price.dto';
+import { CreateFieldOperationalHourDto } from './create-field-operational-hour.dto';
 
 export class CreateFieldDto {
   @IsUUID()
@@ -59,4 +60,11 @@ export class CreateFieldDto {
   @Type(() => CreateFieldPriceDto)
   @IsOptional()
   prices?: CreateFieldPriceDto[];
+
+  @IsArray()
+  @ArrayMaxSize(2)
+  @ValidateNested({ each: true })
+  @Type(() => CreateFieldOperationalHourDto)
+  @IsOptional()
+  openingHours?: CreateFieldOperationalHourDto[];
 }

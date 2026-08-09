@@ -7,23 +7,26 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { UploadPaymentProofDto, CancelBookingDto } from './dto/update-booking.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoggerService } from '../common/logger.service';
-import { BookingStatus, PaymentStatus } from '@prisma/client';
+import { BookingStatus, DayType, PaymentStatus } from '@prisma/client';
 import { EmailService } from '../common/email.service';
 
-function isWithinOperationalHours(date: Date, isEndTime = false): boolean {
-  // Convert to Jakarta time (UTC+7)
-  const targetTime = new Date(date.getTime() + 7 * 60 * 60 * 1000);
-  const hour = targetTime.getUTCHours();
-  const minutes = targetTime.getUTCMinutes();
-  
-  // Restricted range: between 01:00 (exclusive) and 06:00 (exclusive)
-  if (hour > 1 && hour < 6) {
-    return false;
-  }
-  if (hour === 1 && (minutes > 0 || !isEndTime)) {
-    return false;
-  }
-  return true;
+function getWibHour(date: Date): number {
+  return new Date(date.getTime() + 7 * 60 * 60 * 1000).getUTCHours();
+}
+
+function getDayType(date: Date): DayType {
+  const day = new Date(date.getTime() + 7 * 60 * 60 * 1000).getUTCDay();
+  return day === 0 || day === 6 ? DayType.WEEKEND : DayType.WEEKDAY;
+}
+
+function getOperationalWindow(openingHours: { dayType: DayType; startHour: number; endHour: number }[], dayType: DayType) {
+  return (
+    openingHours.find((item) => item.dayType === dayType) || {
+      dayType,
+      startHour: 6,
+      endHour: 24,
+    }
+  );
 }
 
 @Injectable()
@@ -48,6 +51,9 @@ export class BookingService {
     // Validasi field exists dan active
     const field = await this.prisma.field.findUnique({
       where: { id: fieldId },
+      include: {
+        openingHours: true,
+      },
     });
 
     if (!field) {
@@ -66,10 +72,21 @@ export class BookingService {
       throw new BadRequestException('Waktu selesai harus lebih besar dari waktu mulai');
     }
 
-    // Jam operasional check: 06:00 AM to 01:00 AM next day
-    if (!isWithinOperationalHours(start, false) || !isWithinOperationalHours(end, true)) {
+    const slotHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+    if (!Number.isInteger(slotHours) || slotHours <= 0) {
+      throw new BadRequestException('Durasi booking harus dalam kelipatan 1 jam');
+    }
+
+    const startHour = getWibHour(start);
+    const dayType = getDayType(start);
+    const operationalHour = getOperationalWindow(field.openingHours, dayType);
+
+    if (
+      startHour < operationalHour.startHour ||
+      startHour + slotHours > operationalHour.endHour
+    ) {
       throw new BadRequestException(
-        'Jam operasional lapangan adalah pukul 06:00 hingga 01:00 WIB (dini hari). Lapangan tidak dapat dipesan di luar jam tersebut.'
+        `Jam operasional lapangan untuk ${dayType} adalah pukul ${String(operationalHour.startHour).padStart(2, '0')}:00 hingga ${String(operationalHour.endHour).padStart(2, '0')}:00 WIB. Lapangan tidak dapat dipesan di luar jam tersebut.`
       );
     }
 

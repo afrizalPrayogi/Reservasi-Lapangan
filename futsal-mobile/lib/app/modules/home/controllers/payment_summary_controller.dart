@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:typed_data';
 import 'package:reservasi_futsal/app/data/model/field_model.dart';
 import 'package:reservasi_futsal/app/data/repository/booking_repository.dart';
 import 'package:reservasi_futsal/app/modules/home/controllers/home_controller.dart';
@@ -15,6 +16,7 @@ class PaymentSummaryController extends GetxController {
   late String orderDate;
 
   final proofFile = Rxn<XFile>();
+  final proofBytes = Rxn<Uint8List>();
   final isLoading = false.obs;
   final isDpSelected = false.obs;
 
@@ -51,6 +53,7 @@ class PaymentSummaryController extends GetxController {
     final picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked != null) {
       proofFile.value = picked;
+      proofBytes.value = await picked.readAsBytes();
     }
   }
 

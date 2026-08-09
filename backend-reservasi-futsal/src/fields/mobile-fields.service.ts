@@ -24,6 +24,24 @@ function getLocalHour(date: Date): number {
   return wibHour;
 }
 
+function getDayType(date: Date): DayType {
+  const day = new Date(date.getTime() + 7 * 60 * 60 * 1000).getUTCDay();
+  return day === 0 || day === 6 ? DayType.WEEKEND : DayType.WEEKDAY;
+}
+
+function getOperationalWindow(
+  openingHours: { dayType: DayType; startHour: number; endHour: number }[],
+  dayType: DayType,
+) {
+  return (
+    openingHours.find((item) => item.dayType === dayType) || {
+      dayType,
+      startHour: 6,
+      endHour: 24,
+    }
+  );
+}
+
 function parseLocalDateYYYYMMDD(value: string): { year: number; month: number; day: number } {
   const match = /^\d{4}-\d{2}-\d{2}$/.exec(value);
   if (!match) {
@@ -114,6 +132,27 @@ export class MobileFieldsService {
     return prices[0].price;
   }
 
+  private isSlotWithinOperationalHours(input: {
+    openingHours: { dayType: DayType; startHour: number; endHour: number }[];
+    slotStart: Date;
+    slotEnd: Date;
+  }): boolean {
+    const { openingHours, slotStart, slotEnd } = input;
+    const dayType = getDayType(slotStart);
+    const operationalWindow = getOperationalWindow(openingHours, dayType);
+    const startHour = getLocalHour(slotStart);
+    const slotHours = (slotEnd.getTime() - slotStart.getTime()) / (1000 * 60 * 60);
+
+    if (!Number.isInteger(slotHours) || slotHours <= 0) {
+      return false;
+    }
+
+    return (
+      startHour >= operationalWindow.startHour &&
+      startHour + slotHours <= operationalWindow.endHour
+    );
+  }
+
   async listMobileFields(params: {
     startTime?: string;
     endTime?: string;
@@ -140,6 +179,7 @@ export class MobileFieldsService {
       where,
       include: {
         prices: { orderBy: [{ dayType: 'asc' }, { startHour: 'asc' }] },
+        openingHours: { orderBy: [{ dayType: 'asc' }] },
         images: { orderBy: [{ isPrimary: 'desc' }, { order: 'asc' }, { createdAt: 'asc' }] },
       },
       orderBy: [{ createdAt: 'desc' }],
@@ -164,7 +204,13 @@ export class MobileFieldsService {
     // Map all fields
     let filteredFields = allFields
       .map((f) => {
-        const isAvailable = !busySet.has(f.id);
+        const isAvailable =
+          !busySet.has(f.id) &&
+          this.isSlotWithinOperationalHours({
+            openingHours: f.openingHours,
+            slotStart: start,
+            slotEnd: end,
+          });
         const pricePerHour = this.getPricePerHourForSlot({
           prices: f.prices,
           slotStart: start,
@@ -183,6 +229,12 @@ export class MobileFieldsService {
           },
           pricePerHour, // bisa null jika tidak ada harga untuk slot ini
           isAvailable,
+          operationalHours: f.openingHours.map((item) => ({
+            id: item.id,
+            dayType: item.dayType,
+            startHour: item.startHour,
+            endHour: item.endHour,
+          })),
           images: f.images.map((img) => ({
             id: img.id,
             imageUrl: img.imageUrl,
@@ -238,6 +290,7 @@ export class MobileFieldsService {
       where: { id },
       include: {
         prices: { orderBy: [{ dayType: 'asc' }, { startHour: 'asc' }] },
+        openingHours: { orderBy: [{ dayType: 'asc' }] },
         images: { orderBy: [{ isPrimary: 'desc' }, { order: 'asc' }, { createdAt: 'asc' }] },
       },
     });
@@ -258,6 +311,19 @@ export class MobileFieldsService {
     if (pricePerHour === null) {
       return {
         message: 'Lapangan tidak tersedia untuk slot waktu ini',
+        data: null,
+      };
+    }
+
+    if (
+      !this.isSlotWithinOperationalHours({
+        openingHours: field.openingHours,
+        slotStart: start,
+        slotEnd: end,
+      })
+    ) {
+      return {
+        message: 'Lapangan tidak tersedia untuk jam operasional ini',
         data: null,
       };
     }
@@ -323,6 +389,12 @@ export class MobileFieldsService {
         },
         pricePerHour,
         isAvailable: !busy,
+        operationalHours: field.openingHours.map((item) => ({
+          id: item.id,
+          dayType: item.dayType,
+          startHour: item.startHour,
+          endHour: item.endHour,
+        })),
         bookedHours,
         images: field.images.map((img) => ({
           id: img.id,

@@ -9,6 +9,7 @@ import { LoggerService } from '../../common/logger.service';
 import {
   CreateFieldDto,
   CreateFieldPriceDto,
+  CreateFieldOperationalHourDto,
   UpdateFieldDto,
   UpdateFieldPriceDto,
 } from './dto';
@@ -34,6 +35,25 @@ export class FieldsService {
 
     if (price < 0) {
       throw new BadRequestException('price tidak boleh negatif');
+    }
+  }
+
+  private validateOperationalHourRange(input: {
+    startHour: number;
+    endHour: number;
+  }) {
+    const { startHour, endHour } = input;
+
+    if (endHour !== 24) {
+      throw new BadRequestException('Jam tutup operasional harus 24:00');
+    }
+
+    if (startHour < 0 || startHour > 23) {
+      throw new BadRequestException('Jam buka operasional harus 0-23');
+    }
+
+    if (startHour >= endHour) {
+      throw new BadRequestException('Jam buka operasional harus lebih kecil dari jam tutup');
     }
   }
 
@@ -81,8 +101,58 @@ export class FieldsService {
     }
   }
 
+  private ensureNoOverlappingOperationalHoursInPayload(
+    operationalHours: CreateFieldOperationalHourDto[],
+  ) {
+    const seenDayTypes = new Set<string>();
+
+    for (const item of operationalHours) {
+      this.validateOperationalHourRange(item);
+
+      if (seenDayTypes.has(item.dayType)) {
+        throw new BadRequestException(
+          `Jam operasional untuk ${item.dayType} hanya boleh 1 baris`,
+        );
+      }
+      seenDayTypes.add(item.dayType);
+    }
+  }
+
+  private async ensureNoOverlappingOperationalHour({
+    fieldId,
+    dayType,
+    excludeOperationalHourId,
+  }: {
+    fieldId: string;
+    dayType: DayType;
+    excludeOperationalHourId?: string;
+  }) {
+    const overlap = await this.prisma.fieldOpeningHour.findFirst({
+      where: {
+        fieldId,
+        dayType,
+        ...(excludeOperationalHourId ? { id: { not: excludeOperationalHourId } } : {}),
+      },
+    });
+
+    if (overlap) {
+      throw new ConflictException(
+        `Jam operasional untuk ${dayType} sudah tersedia`,
+      );
+    }
+  }
+
   async create(dto: CreateFieldDto) {
-    const { name, type, isActive, prices, lengthMeter, widthMeter, imageUrls } = dto;
+    const {
+      name,
+      type,
+      isActive,
+      prices,
+      openingHours,
+      lengthMeter,
+      widthMeter,
+      imageUrls,
+    } = dto;
 
     const existing = await this.prisma.field.findFirst({
       where: { name },
@@ -95,6 +165,10 @@ export class FieldsService {
 
     if (prices?.length) {
       this.ensureNoOverlappingPricesInPayload(prices);
+    }
+
+    if (openingHours?.length) {
+      this.ensureNoOverlappingOperationalHoursInPayload(openingHours);
     }
 
     if (lengthMeter !== undefined && lengthMeter <= 0) {
@@ -130,6 +204,17 @@ export class FieldsService {
               },
             }
           : {}),
+        ...(openingHours?.length
+          ? {
+              openingHours: {
+                create: openingHours.map((item) => ({
+                  dayType: item.dayType,
+                  startHour: item.startHour,
+                  endHour: item.endHour,
+                })),
+              },
+            }
+          : {}),
         ...(imageUrls?.length
           ? {
               images: {
@@ -144,6 +229,7 @@ export class FieldsService {
       },
       include: {
         prices: { orderBy: [{ dayType: 'asc' }, { startHour: 'asc' }] },
+        openingHours: { orderBy: [{ dayType: 'asc' }] },
         images: { orderBy: [{ isPrimary: 'desc' }, { order: 'asc' }, { createdAt: 'asc' }] },
         _count: { select: { bookings: true } },
       },
@@ -189,6 +275,7 @@ export class FieldsService {
         where,
         include: {
           prices: { orderBy: [{ dayType: 'asc' }, { startHour: 'asc' }] },
+          openingHours: { orderBy: [{ dayType: 'asc' }] },
           images: { orderBy: [{ isPrimary: 'desc' }, { order: 'asc' }, { createdAt: 'asc' }] },
           _count: { select: { bookings: true } },
         },
@@ -216,6 +303,7 @@ export class FieldsService {
       where: { id },
       include: {
         prices: { orderBy: [{ dayType: 'asc' }, { startHour: 'asc' }] },
+        openingHours: { orderBy: [{ dayType: 'asc' }] },
         images: { orderBy: [{ isPrimary: 'desc' }, { order: 'asc' }, { createdAt: 'asc' }] },
         _count: { select: { bookings: true } },
       },
@@ -268,6 +356,11 @@ export class FieldsService {
       this.ensureNoOverlappingPricesInPayload(dto.prices);
     }
 
+    // Validasi opening hours jika ada
+    if (dto.openingHours?.length) {
+      this.ensureNoOverlappingOperationalHoursInPayload(dto.openingHours);
+    }
+
     const updateData: any = {
       ...(dto.name ? { name: dto.name } : {}),
       ...(dto.type ? { type: dto.type } : {}),
@@ -278,9 +371,13 @@ export class FieldsService {
 
     const nextImageUrls = dto.imageUrls;
     const nextPrices = dto.prices;
+    const nextOpeningHours = dto.openingHours;
 
     // Jika ada perubahan imageUrls atau prices, gunakan transaction
-    const needsTransaction = nextImageUrls !== undefined || nextPrices !== undefined;
+    const needsTransaction =
+      nextImageUrls !== undefined ||
+      nextPrices !== undefined ||
+      nextOpeningHours !== undefined;
 
     const field = needsTransaction
       ? await this.prisma.$transaction(async (tx) => {
@@ -292,6 +389,10 @@ export class FieldsService {
           // Hapus prices lama jika ada prices baru
           if (nextPrices !== undefined) {
             await tx.fieldPrice.deleteMany({ where: { fieldId: id } });
+          }
+
+          if (nextOpeningHours !== undefined) {
+            await tx.fieldOpeningHour.deleteMany({ where: { fieldId: id } });
           }
 
           return tx.field.update({
@@ -321,9 +422,21 @@ export class FieldsService {
                     },
                   }
                 : {}),
+              ...(nextOpeningHours !== undefined && nextOpeningHours.length
+                ? {
+                    openingHours: {
+                      create: nextOpeningHours.map((item) => ({
+                        dayType: item.dayType,
+                        startHour: item.startHour,
+                        endHour: item.endHour,
+                      })),
+                    },
+                  }
+                : {}),
             },
             include: {
               prices: { orderBy: [{ dayType: 'asc' }, { startHour: 'asc' }] },
+              openingHours: { orderBy: [{ dayType: 'asc' }] },
               images: {
                 orderBy: [{ isPrimary: 'desc' }, { order: 'asc' }, { createdAt: 'asc' }],
               },
@@ -336,6 +449,7 @@ export class FieldsService {
           data: updateData,
           include: {
             prices: { orderBy: [{ dayType: 'asc' }, { startHour: 'asc' }] },
+            openingHours: { orderBy: [{ dayType: 'asc' }] },
             images: { orderBy: [{ isPrimary: 'desc' }, { order: 'asc' }, { createdAt: 'asc' }] },
             _count: { select: { bookings: true } },
           },
@@ -369,6 +483,9 @@ export class FieldsService {
     await this.prisma.$transaction(async (tx) => {
       // Delete FieldPrice records first
       await tx.fieldPrice.deleteMany({ where: { fieldId: id } });
+
+      // Delete opening hour records too
+      await tx.fieldOpeningHour.deleteMany({ where: { fieldId: id } });
       
       // FieldImage will be auto-deleted due to onDelete: Cascade in schema
       // But we can explicitly delete it for clarity
