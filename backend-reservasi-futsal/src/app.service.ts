@@ -352,7 +352,7 @@ export class AppService {
       </div>
       <div class="stat-card">
         <div class="stat-icon">🗄️</div>
-        <div class="stat-value">MySQL</div>
+        <div class="stat-value">PostgreSQL</div>
         <div class="stat-label">Database</div>
       </div>
     </div>
@@ -652,7 +652,7 @@ export class AppService {
             <span>🔺</span> Prisma ORM
           </div>
           <div class="tech-badge">
-            <span>🐬</span> MySQL / MariaDB
+            <span>🐘</span> PostgreSQL
           </div>
           <div class="tech-badge">
             <span>🔐</span> JWT Auth

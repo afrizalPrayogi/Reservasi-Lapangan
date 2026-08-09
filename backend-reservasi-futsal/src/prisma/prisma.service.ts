@@ -1,5 +1,4 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '@prisma/client';
 import { LoggerService } from '../common/logger.service';
 
@@ -9,15 +8,13 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor(private logger: LoggerService) {
-    const adapter = new PrismaMariaDb({
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '3306'),
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'db_reservasi_lapangan',
-      connectionLimit: 10,
+    super({
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL,
+        },
+      },
     });
-    super({ adapter });
   }
 
   async onModuleInit() {
