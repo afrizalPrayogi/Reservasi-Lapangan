@@ -56,6 +56,9 @@ services:
       - key: NODE_VERSION
         value: 20
       - key: BACKEND_INTERNAL_URL
-        sync: false # Set to backend's Render URL after deploy
+        fromService:
+          type: web
+          name: reservasi-futsal-backend
+          property: hostport
       - key: PORT
         value: 3000

@@ -2,7 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   async rewrites() {
-    const backendUrl = process.env.BACKEND_INTERNAL_URL || 'http://127.0.0.1:3333';
+    const backendTarget = process.env.BACKEND_INTERNAL_URL || '127.0.0.1:4000';
+    const backendUrl = backendTarget.startsWith('http://') || backendTarget.startsWith('https://')
+      ? backendTarget
+      : `http://${backendTarget}`;
 
     return [
       {
