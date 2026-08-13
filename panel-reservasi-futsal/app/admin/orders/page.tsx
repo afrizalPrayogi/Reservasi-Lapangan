@@ -38,10 +38,10 @@ function formatDateTime(dateStr: string) {
 }
 
 function formatTime(dateStr: string) {
-  return new Date(dateStr).toLocaleTimeString("en-US", {
+  return new Date(dateStr).toLocaleTimeString("id-ID", {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: true,
+    hour12: false,
   });
 }
 

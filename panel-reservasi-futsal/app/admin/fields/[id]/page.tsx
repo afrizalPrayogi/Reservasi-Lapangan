@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
-import { ArrowLeft, Pencil, MapPin, Ruler, DollarSign, Calendar } from 'lucide-react';
+import { ArrowLeft, Pencil, MapPin, Ruler, DollarSign, Calendar, Clock } from 'lucide-react';
 import { DashboardLayout } from '@/components/templates';
 import { Button, Card, Badge, Text } from '@/components/atoms';
 import { useAuthStore, useFieldStore } from '@/stores';
@@ -16,6 +16,12 @@ function formatRupiah(value: number) {
     currency: 'IDR',
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function formatHour(hour: number) {
+  const hh = String(Math.floor(hour)).padStart(2, '0');
+  const mm = String(Math.round((hour - Math.floor(hour)) * 60)).padStart(2, '0');
+  return `${hh}:${mm}`;
 }
 
 const defaultImage =
@@ -212,7 +218,7 @@ export default function FieldDetailPage() {
                             {price.dayType === 'WEEKDAY' ? 'Hari Kerja' : 'Akhir Pekan'}
                           </Text>
                           <Text variant="caption" className="text-gray-500">
-                            {price.startHour}:00 - {price.endHour}:00
+                            {formatHour(price.startHour)} - {formatHour(price.endHour)}
                           </Text>
                         </div>
                       </div>
@@ -226,6 +232,42 @@ export default function FieldDetailPage() {
             ) : (
               <Text variant="body" className="text-gray-500">
                 Belum ada harga yang ditentukan
+              </Text>
+            )}
+          </Card>
+
+          {/* Operational Hours */}
+          <Card>
+            <div className="flex items-center gap-2 mb-4">
+              <Clock size={20} className="text-primary" />
+              <Text variant="h4" className="font-bold">
+                Jam Operasional
+              </Text>
+            </div>
+
+            {field.openingHours && field.openingHours.length > 0 ? (
+              <div className="space-y-3">
+                {field.openingHours.map((oh, idx) => (
+                  <Card key={idx} className="bg-gray-50" padding="sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Clock size={18} className="text-gray-500" />
+                        <div>
+                          <Text variant="body-sm" className="font-medium">
+                            {oh.dayType === 'WEEKDAY' ? 'Hari Kerja' : 'Akhir Pekan'}
+                          </Text>
+                          <Text variant="caption" className="text-gray-500">
+                            Buka {formatHour(oh.startHour)} - Tutup {formatHour(oh.endHour)} WIB
+                          </Text>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <Text variant="body" className="text-gray-500">
+                Belum ada jam operasional yang ditentukan
               </Text>
             )}
           </Card>
