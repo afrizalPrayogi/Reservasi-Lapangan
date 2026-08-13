@@ -68,14 +68,16 @@ export class BookingController {
         throw new BadRequestException('Invalid time format for startTime');
       }
 
-      // combine with orderDate
+      // combine with orderDate (interpret as WIB, UTC+7)
       const datePart = new Date(dto.orderDate);
       if (isNaN(datePart.getTime())) {
         throw new BadRequestException('orderDate must be a valid date (YYYY-MM-DD)');
       }
 
-      start = new Date(datePart);
-      start.setHours(hh, mm, 0, 0);
+      const year = datePart.getFullYear();
+      const month = datePart.getMonth();
+      const day = datePart.getDate();
+      start = new Date(Date.UTC(year, month, day, hh - 7, mm, 0, 0));
     } else {
       // try ISO parse
       const parsed = new Date(raw);
